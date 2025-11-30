@@ -11,7 +11,7 @@ const DAILY_API_BASE = 'https://api.daily.co/v1';
 
 // Garante que SEMPRE teremos uma URL de sala Daily para um appointmentId
 // - Se a sala ainda não existe -> cria
-// - Se a sala já existe (409) -> faz GET e devolve a URL existente
+// - Se a sala já existe -> busca a sala e devolve a URL
 async function ensureRoomUrl(appointmentId) {
   if (!process.env.DAILY_API_KEY) {
     throw new Error('DAILY_API_KEY não configurada nas variáveis de ambiente');
@@ -40,11 +40,20 @@ async function ensureRoomUrl(appointmentId) {
       }
     );
 
+    // Se criou de boa, devolve a URL
     return response.data.url;
 
   } catch (error) {
-    // SE A SALA JÁ EXISTIR (409) → RECUPERA A SALA
-    if (error.response && error.response.status === 409) {
+    const status = error.response?.status;
+    const data = error.response?.data;
+
+    // 👇 Daily às vezes manda "invalid-request-error" com texto "already exists"
+    const alreadyExists =
+      data?.info?.includes('already exists') ||
+      data?.error === 'room-already-exists';
+
+    if (status === 409 || alreadyExists) {
+      // A sala JÁ EXISTE → vamos buscá-la pelo nome
       try {
         const getResp = await axios.get(
           `${DAILY_API_BASE}/rooms/${roomName}`,
@@ -56,9 +65,11 @@ async function ensureRoomUrl(appointmentId) {
         );
 
         return getResp.data.url;
-
       } catch (getError) {
-        console.error("Erro ao recuperar sala existente:", getError.response?.data || getError);
+        console.error(
+          'Erro ao recuperar sala existente:',
+          getError.response?.data || getError.message || getError
+        );
         throw getError;
       }
     }
@@ -104,5 +115,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Backend rodando na porta ${PORT}`);
 });
-
 
