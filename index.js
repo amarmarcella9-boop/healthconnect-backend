@@ -41,20 +41,26 @@ async function ensureRoomUrl(appointmentId) {
     );
 
     return response.data.url;
-  } catch (error) {
-    // Se a sala já existir, Daily deve retornar 409 (room name already taken)
-    if (error.response && error.response.status === 409) {
-      // Então a gente só BUSCA essa sala pelo nome e devolve a URL
-      const getResp = await axios.get(
-        `${DAILY_API_BASE}/rooms/${roomName}`,
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.DAILY_API_KEY}`,
-          },
-        }
-      );
 
-      return getResp.data.url;
+  } catch (error) {
+    // SE A SALA JÁ EXISTIR (409) → RECUPERA A SALA
+    if (error.response && error.response.status === 409) {
+      try {
+        const getResp = await axios.get(
+          `${DAILY_API_BASE}/rooms/${roomName}`,
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.DAILY_API_KEY}`,
+            },
+          }
+        );
+
+        return getResp.data.url;
+
+      } catch (getError) {
+        console.error("Erro ao recuperar sala existente:", getError.response?.data || getError);
+        throw getError;
+      }
     }
 
     console.error(
@@ -79,6 +85,7 @@ app.post('/api/create-room', async (req, res) => {
     const roomUrl = await ensureRoomUrl(appointmentId);
 
     return res.json({ roomUrl });
+
   } catch (error) {
     console.error(
       'Erro no endpoint /api/create-room:',
@@ -97,3 +104,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Backend rodando na porta ${PORT}`);
 });
+
+
